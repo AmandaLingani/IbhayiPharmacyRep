@@ -1,0 +1,36 @@
+﻿using PrescribingSystem.Data;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace PrescribingSystem.Models
+{
+    public class PrescriptionOrders //This table/model, we share
+    {
+        [Key]
+        public int PrescriptionOrdersId { get; set; }
+        [Required]
+        public string CustomerId { get; set; }  // Assuming Identity User Id
+
+        [ForeignKey(nameof(CustomerId))]
+        public ApplicationUser Customer { get; set; }   // Navigation property
+        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+        public OrderStatus OrderStatus { get; set; }
+        
+        public decimal? TotalCost { get; set; }
+        public bool IsRepeatOrder { get; set; }
+      
+       public DateTime? PackedDate { get; set; }
+        public DateTime? ReadyDate { get; set; }
+        public DateTime? CollectedDate { get; set; }
+        public ICollection<OrderItem> OrderItems { get; set; }
+    }
+    public enum OrderStatus
+    {
+        Pending,
+        Packed,
+        Processing,
+        ReadyForCollection,
+        Rejected,
+        Collected
+    }
+}
