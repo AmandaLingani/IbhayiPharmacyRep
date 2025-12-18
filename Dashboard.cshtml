@@ -1,0 +1,103 @@
+﻿@model PrescribingSystem.Models.ViewModels.DashboardViewModel
+@{
+    Layout = "_PharmacistLayout";
+}
+
+<div class="row g-3">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body">
+                <h5 class="card-title">Prescriptions Today</h5>
+                <p class="fs-2">@Model.PrescriptionsToday</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-warning h-100">
+            <div class="card-body">
+                <h5 class="card-title">Pending Prescriptions</h5>
+                <p class="fs-2">@Model.PendingPrescriptions</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <h5 class="card-title">Total Customers</h5>
+                <p class="fs-2">@Model.TotalCustomers</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-danger h-100">
+            <div class="card-body">
+                <h5 class="card-title">Low Stock Alerts</h5>
+                <p class="fs-2">@Model.LowStockAlerts</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <h6>Charts</h6>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Prescriptions Dispensed (Weekly)</h5>
+                <canvas id="prescriptionsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Top Prescribed Medicines</h5>
+                <canvas id="topMedicinesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        const weeklyLabels = @Html.Raw(Json.Serialize(Model.WeeklyLabels));
+        const weeklyData = @Html.Raw(Json.Serialize(Model.WeeklyCounts));
+
+        const ctx = document.getElementById('prescriptionsChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: weeklyLabels,
+                datasets: [{
+                    label: 'Prescriptions',
+                    data: weeklyData,
+                    backgroundColor: 'rgba(54,162,235,0.7)',
+                }]
+            },
+            options: { responsive: true, scales: { y: { beginAtZero: true } } }
+        });
+
+        const topMedicineLabels = @Html.Raw(Json.Serialize(Model.TopMedicineNames));
+        const topMedicineData = @Html.Raw(Json.Serialize(Model.TopMedicineCounts));
+
+        const ctx2 = document.getElementById('topMedicinesChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'pie',
+            data: {
+                labels: topMedicineLabels,
+                datasets: [{
+                    data: topMedicineData,
+                    backgroundColor: ['#4e73df','#1cc88a','#36b9cc','#f6c23e','#e74a3b'],
+                }]
+            },
+            options: { responsive: true }
+        });
+    </script>
+}

@@ -1,0 +1,150 @@
+﻿@model PrescribingSystem.Models.ViewModels.CustomerPrescriptionViewModel
+@{
+    Layout = "_PharmacistLayout";
+}
+
+<div class="container py-4">
+    <h2 class="fw-bold mb-3">
+        <i class="bi bi-file-medical me-2"></i> Prescriptions for @Model.CustomerName
+    </h2>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <form asp-action="DispenseSelected" method="post">
+        <input type="hidden" asp-for="CustomerId" />
+
+        <table class="table table-hover shadow-sm rounded">
+            <thead class="table-primary">
+                <tr>
+                    <th>Select</th>
+                    <th>Script #</th>
+                    <th>Date</th>
+                    <th>Doctor</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.Prescriptions.Count; i++)
+                {
+                    var script = Model.Prescriptions[i];
+                    <tr>
+                        <td>
+                            <input type="checkbox" asp-for="Prescriptions[@i].IsSelected" />
+                            <input type="hidden" asp-for="Prescriptions[@i].PrescriptionId" />
+                        </td>
+                        <td>@script.PrescriptionId</td>
+                        <td>@script.PrescriptionDate.ToString("dd/MM/yyyy")</td>
+                        <td>@script.DoctorName</td>
+                        <td>
+                            @switch (script.Status)
+                            {
+                                case PrescriptionStatus.Dispensed:
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i> Dispensed
+                                    </span>
+                                    break;
+
+                                case PrescriptionStatus.PartiallyDispensed:
+                                    <span class="badge bg-info text-dark">
+                                        <i class="bi bi-hourglass-split"></i> Partially Dispensed
+                                    </span>
+                                    break;
+
+                                default:
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-save"></i> Saved
+                                    </span>
+                                    break;
+                            }
+                        </td>
+                    </tr>
+
+                    <!-- Medications under this prescription -->
+                    <tr class="bg-light">
+                        <td></td>
+                        <td colspan="4">
+                            <table class="table table-sm mb-0">
+                                <thead class="table-secondary">
+                                    <tr>
+                                        <th>Select</th>
+                                        <th>Medication</th>
+                                        <th>Quantity</th>
+                                        <th>Repeats Left</th>
+                                        <th>Instructions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (script.Medications.Any())
+                                    {
+                                        @for (int j = 0; j < script.Medications.Count; j++)
+                                        {
+                                            var med = script.Medications[j];
+                                            var isDepleted = med.RepeatsLeft <= 0;
+
+                                            <tr class="@(isDepleted ? "table-light text-muted" : "")">
+                                                <td>
+                                                    <input type="checkbox"
+                                                           name="SelectedMedicationIds"
+                                                           value="@med.MedicationId"
+                                                           @(isDepleted ? "disabled" : "") />
+                                                </td>
+                                                <td>@med.Name</td>
+                                                <td>@med.Quantity</td>
+                                                <td>
+                                                    @if (isDepleted)
+                                                    {
+                                                        <span class="text-danger fw-bold">No repeats left</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        @med.RepeatsLeft
+                                                    }
+                                                </td>
+                                                <td>@med.Instructions</td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="text-muted fst-italic">
+                                                No medications found for this prescription.
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+
+                            <div class="mt-2">
+                                <a asp-action="ContinuePrescription"
+                                   asp-route-id="@script.PrescriptionId"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-end mt-3 gap-2">
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-check2-circle me-1"></i> Dispense Selected
+            </button>
+            <a asp-action="SavedPrescriptions" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
+        </div>
+    </form>
+</div>
+
+

@@ -1,0 +1,248 @@
+﻿@model PrescribingSystem.Models.ViewModels.PharmacistReportViewModel
+@using PrescribingSystem.Models.ViewModels
+@{
+    Layout = "_PharmacistLayout";
+}
+
+<div class="container py-4">
+    <h2 class="fw-bold mb-4">Pharmacist Dispensing Report</h2>
+
+    <form method="get" asp-action="Report" class="row g-3 align-items-end mb-4">
+
+        <!-- Date Filters -->
+        <div class="col-md-3">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="startDate" class="form-control"
+                   value="@Model.SelectedStartDate.ToString("yyyy-MM-dd")" required />
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label">End Date</label>
+            <input type="date" name="endDate" class="form-control"
+                   value="@Model.SelectedEndDate.ToString("yyyy-MM-dd")" required />
+        </div>
+
+        <!-- Grouping Dropdown -->
+        <div class="col-md-3">
+            <label class="form-label">Group By</label>
+            <select id="grouping" name="grouping" class="form-select" onchange="this.form.submit()">
+                <option value="ByPatient" selected="@(Model.Grouping == ReportGrouping.ByPatient)">Patient</option>
+                <option value="ByMedication" selected="@(Model.Grouping == ReportGrouping.ByMedication)">Medication</option>
+                <option value="BySchedule" selected="@(Model.Grouping == ReportGrouping.BySchedule)">Schedule</option>
+            </select>
+        </div>
+
+        <!-- Dynamic Filter Dropdown -->
+        @if (Model.Grouping == ReportGrouping.ByPatient)
+        {
+            <div class="col-md-3">
+                <label class="form-label">Select Patient</label>
+                <select name="selectedPatientId" class="form-select">
+                    <option value="">-- All Patients --</option>
+                    @foreach (var p in Model.Patients)
+                    {
+                        <option value="@p.Value" selected="@(p.Value == Model.SelectedPatientId)">
+                            @p.Text
+                        </option>
+                    }
+                </select>
+            </div>
+        }
+        else if (Model.Grouping == ReportGrouping.ByMedication)
+        {
+            <div class="col-md-3">
+                <label class="form-label">Select Medication</label>
+                <select name="selectedMedicationId" class="form-select">
+                    <option value="">-- All Medications --</option>
+                    @foreach (var m in Model.Medications)
+                    {
+                        <option value="@m.Value" selected="@(m.Value == Model.SelectedMedicationId?.ToString())">
+                            @m.Text
+                        </option>
+                    }
+                </select>
+            </div>
+        }
+         else if (Model.Grouping == ReportGrouping.BySchedule)
+        {
+            <div class="col-md-3">
+                <label class="form-label">Select Schedule</label>
+                <select name="selectedSchedule" class="form-select">
+                    <option value="">-- All Schedules --</option>
+                    @foreach (var s in Model.Schedules)
+                    {
+                        var isSelected = Model.SelectedSchedule.HasValue &&
+                        s.Value == Model.SelectedSchedule.Value.ToString();
+
+                        <option value="@s.Value" selected="@(s.Value == Model.SelectedSchedule.ToString())">
+                            @s.Text
+                        </option>
+                    }
+                </select>
+            </div>
+        } 
+
+        <!-- Action Buttons -->
+        <div class="col-md-6 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-search"></i> Generate
+            </button>
+            <button type="submit" name="download" value="true" class="btn btn-success">
+                <i class="bi bi-file-earmark-pdf"></i> Download PDF
+            </button>
+        </div>
+    </form>
+
+    <!-- Report Results -->
+    @if (Model.Prescriptions != null && Model.Prescriptions.Any())
+    {
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Results: @Model.TotalPrescriptions prescriptions dispensed</h5>
+
+                @* ────────────────────────────── GROUP BY PATIENT ────────────────────────────── *@
+                @if (Model.Grouping == ReportGrouping.ByPatient)
+                {
+                    @foreach (var group in Model.Prescriptions.GroupBy(p => p.Customer))
+                    {
+                        <div class="border rounded p-3 mb-3">
+                            <h6 class="fw-bold text-primary">
+                                Patient: @group.Key.FirstName @group.Key.LastName
+                            </h6>
+
+                            <table class="table table-sm table-bordered mt-2">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Medication</th>
+                                        <th>Quantity</th>
+                                        <th>Instructions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var pres in group)
+                                    {
+                                        foreach (var med in pres.MedicationItems)
+                                        {
+                                            <tr>
+                                                <td>@pres.PrescriptionDate.ToString("dd/MM/yyyy")</td>
+                                                <td>@med.Medication.Name</td>
+                                                <td>@med.Quantity</td>
+                                                <td>@med.Instructions</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+
+                            <p class="text-end fw-bold">
+                                Subtotal: @group.SelectMany(g => g.MedicationItems).Count()
+                            </p>
+                        </div>
+                    }
+                }
+
+                @* ────────────────────────────── GROUP BY MEDICATION ────────────────────────────── *@
+                else if (Model.Grouping == ReportGrouping.ByMedication)
+                {
+
+                    var filteredItems = Model.Prescriptions
+                    .SelectMany(p => p.MedicationItems)
+                    .ToList();
+
+                    @if (filteredItems.Any())
+                    {
+                        var groupedItems = filteredItems.GroupBy(mi => mi.Medication.Name);
+                        foreach (var group in groupedItems)
+                        {
+                            <div class="border rounded p-3 mb-3">
+                                <h6 class="fw-bold text-success">
+                                    Medication: @group.Key
+                                </h6>
+
+                                <table class="table table-sm table-bordered mt-2">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Patient</th>
+                                            <th>Date</th>
+                                            <th>Quantity</th>
+                                            <th>Instructions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in group)
+                                        {
+                                            <tr>
+                                                <td>@item.Prescription.Customer.FirstName @item.Prescription.Customer.LastName</td>
+                                                <td>@item.Prescription.PrescriptionDate.ToString("dd/MM/yyyy")</td>
+                                                <td>@item.Quantity</td>
+                                                <td>@item.Instructions</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+
+                                <p class="text-end fw-bold">Total Dispensed: @group.Count()</p>
+                            </div>
+                        }
+
+                    }
+                }
+
+                @* ────────────────────────────── GROUP BY SCHEDULE ────────────────────────────── *@
+                else if (Model.Grouping == ReportGrouping.BySchedule)
+                {
+
+                    @foreach (var group in Model.Prescriptions
+                                .SelectMany(p => p.MedicationItems)
+                                .GroupBy(mi => mi.Medication.Schedule))
+                    {
+                        <div class="border rounded p-3 mb-3">
+                            <h6 class="fw-bold text-info">
+                                Schedule: @group.Key
+                            </h6>
+
+                            <table class="table table-sm table-bordered mt-2">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Patient</th>
+                                        <th>Medication</th>
+                                        <th>Quantity</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in group)
+                                    {
+                                        <tr>
+                                            <td>@item.Prescription.Customer.FirstName @item.Prescription.Customer.LastName</td>
+                                            <td>@item.Medication.Name</td>
+                                            <td>@item.Quantity</td>
+                                            <td>@item.Prescription.PrescriptionDate.ToString("dd/MM/yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+
+                            <p class="text-end fw-bold">Total: @group.Count()</p>
+                        </div>
+                    }
+                }
+
+                <div class="mt-3 text-end fw-bold">
+                    <p>
+                        Grand Total Dispensed Items:
+                        @Model.Prescriptions.SelectMany(p => p.MedicationItems).Count()
+                    </p>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info mt-4">
+            <i class="bi bi-info-circle"></i>
+            No prescriptions found for the selected filters or date range.
+        </div>
+    }
+</div>

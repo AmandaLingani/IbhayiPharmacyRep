@@ -1,0 +1,232 @@
+﻿@model IEnumerable<PrescribingSystem.Models.ViewModels.PrescriptionOrderViewModel>
+@{
+    Layout = "_PharmacistLayout";
+    var groupedOrders = Model.GroupBy(o => o.CustomerName);
+}
+
+<style>
+    .accordion-button::after {
+        filter: brightness(0.5);
+    }
+
+    .accordion-body {
+        background-color: #fafafa;
+        border-radius: 8px;
+    }
+
+    tr.collapse.show {
+        border-top: 2px solid #dee2e6;
+    }
+
+    .table-hover tbody tr:hover {
+        background-color: #f3f4f6;
+    }
+</style>
+
+<div class="container mt-4">
+    <h3 class="fw-bold mb-2">Prescription Orders</h3>
+    <p class="text-muted mb-4">View, group, and manage customer prescription orders.</p>
+
+    <!-- ✅ Fixed Filter Form -->
+    <form method="get" asp-action="ProcessPrescriptionOrders" class="d-flex align-items-center mb-3">
+        <label for="statusFilter" class="me-2 fw-semibold">Filter:</label>
+        <select name="statusFilter" id="statusFilter" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+            <option value="All" selected="@(ViewBag.StatusFilter == "All")">All</option>
+            <option value="Unpacked" selected="@(ViewBag.StatusFilter == "Unpacked")">Unpacked (Pending + Processing)</option>
+            <option value="Pending" selected="@(ViewBag.StatusFilter == "Pending")">Pending</option>
+            <option value="Processing" selected="@(ViewBag.StatusFilter == "Processing")">Processing</option>
+            <option value="Packed" selected="@(ViewBag.StatusFilter == "Packed")">Packed</option>
+            <option value="ReadyForCollection" selected="@(ViewBag.StatusFilter == "ReadyForCollection")">Ready for Collection</option>
+            <option value="Collected" selected="@(ViewBag.StatusFilter == "Collected")">Collected</option>
+            <option value="Rejected" selected="@(ViewBag.StatusFilter == "Rejected")">Rejected</option>
+        </select>
+        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    </form>
+
+    <!-- Accordion for Grouped Orders -->
+    <div class="accordion" id="customerAccordion">
+        @foreach (var group in groupedOrders)
+        {
+            var customerId = group.Key.Replace(" ", "").ToLower();
+            <div class="accordion-item shadow-sm mb-3 border-0">
+                <h2 class="accordion-header" id="heading-@customerId">
+                    <button class="accordion-button collapsed bg-light fw-semibold" type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#collapse-@customerId"
+                            aria-expanded="false"
+                            aria-controls="collapse-@customerId">
+                        👤 @group.Key (@group.Count() order@(group.Count() > 1 ? "s" : ""))
+                    </button>
+                </h2>
+
+                <div id="collapse-@customerId" class="accordion-collapse collapse"
+                     aria-labelledby="heading-@customerId"
+                     data-bs-parent="#customerAccordion">
+
+                    <div class="accordion-body">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Order Date</th>
+                                    <th>Status</th>
+                                    <th>Total Cost (R)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var order in group)
+                                {
+                                    var orderId = order.PrescriptionOrdersId;
+                                    <tr data-bs-toggle="collapse" data-bs-target="#orderDetails-@orderId" style="cursor: pointer" onclick="event.stopPropagation()">
+                                        <td>@order.PrescriptionOrdersId</td>
+                                        <td>@order.OrderDate.ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>
+                                            <span class="badge bg-@GetStatusColor(order.Status)">
+                                                @order.Status
+                                            </span>
+                                        </td>
+                                        <td>@order.TotalCost?.ToString("0.00")</td>
+                                        <td>
+                                            <form asp-action="ProcessPrescriptionOrders" method="post" onsubmit="event.stopPropagation()">
+                                                <input type="hidden" name="prescriptionOrdersId" value="@order.PrescriptionOrdersId" />
+                                                <input type="hidden" name="statusFilter" value="@ViewBag.StatusFilter" />
+
+                                                @if (order.Status == "Pending")
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-primary confirm-action"
+                                                            data-action="process"
+                                                            data-message="Start processing this order?">Start</button>
+                                                }
+                                                else if (order.Status == "Processing")
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-info text-white confirm-action"
+                                                            data-action="pack"
+                                                            data-message="Mark this order as packed?">Pack</button>
+                                                }
+                                                else if (order.Status == "Packed")
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-success confirm-action"
+                                                            data-action="ready"
+                                                            data-message="Mark this order as ready for collection?">Ready</button>
+                                                }
+                                                else if (order.Status == "ReadyForCollection")
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-secondary confirm-action"
+                                                            data-action="collected"
+                                                            data-message="Mark this order as collected?">Collected</button>
+                                                }
+
+                                                <button type="button" class="btn btn-sm btn-danger confirm-action"
+                                                        data-action="reject"
+                                                        data-message="Are you sure you want to reject this order?">Reject</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+
+                                    <!-- Collapsible Details -->
+                                    <tr class="collapse bg-light" id="orderDetails-@orderId">
+                                        <td colspan="5">
+                                            <table class="table table-sm mb-0">
+                                                <thead class="table-secondary">
+                                                    <tr>
+                                                        <th>Medication</th>
+                                                        <th>Quantity</th>
+                                                        <th>Instructions</th>
+                                                        <th>Price (R)</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var item in order.OrderItems)
+                                                    {
+                                                        <tr>
+                                                            <td>@item.MedicationName</td>
+                                                            <td>@item.Quantity</td>
+                                                            <td>@item.Instructions</td>
+                                                            <td>@item.Price.ToString("0.00")</td>
+                                                        </tr>
+                                                    }
+                                                    <tr class="fw-bold">
+                                                        <td colspan="3" class="text-end">Total</td>
+                                                        <td>R @order.TotalCost?.ToString("0.00")</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ✅ Confirmation Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title fw-bold">Confirm Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage" class="mb-0 fw-semibold"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmYes">Yes, proceed</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            let targetForm, targetAction;
+
+            document.querySelectorAll(".confirm-action").forEach(btn => {
+                btn.addEventListener("click", e => {
+                    e.preventDefault();
+                    targetForm = btn.closest("form");
+                    targetAction = btn.getAttribute("data-action");
+                    const message = btn.getAttribute("data-message");
+                    document.getElementById("confirmMessage").innerText = message;
+
+                    const modal = new bootstrap.Modal(document.getElementById("confirmModal"));
+                    modal.show();
+
+                    document.getElementById("confirmYes").onclick = () => {
+                        const hiddenInput = document.createElement("input");
+                        hiddenInput.type = "hidden";
+                        hiddenInput.name = "action";
+                        hiddenInput.value = targetAction;
+                        targetForm.appendChild(hiddenInput);
+                        targetForm.submit();
+                        modal.hide();
+                    };
+                });
+            });
+        });
+    </script>
+}
+
+@functions {
+    string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "Pending" => "warning",
+            "Processing" => "info",
+            "Packed" => "primary",
+            "ReadyForCollection" => "success",
+            "Collected" => "secondary",
+            "Rejected" => "danger",
+            _ => "dark"
+        };
+    }
+}
+

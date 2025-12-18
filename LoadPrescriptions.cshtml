@@ -1,0 +1,571 @@
+﻿@model PrescribingSystem.Models.ViewModels.PrescriptionViewModel
+@{
+    Layout = "_PharmacistLayout";
+}
+
+<style>
+    select.form-select {
+        width: 100%;
+        min-width: 250px;
+        max-width: 100%;
+    }
+
+    #mySelect {
+        width: 100%;
+        min-width: 250px;
+    }
+
+    .modal-backdrop.show {
+        backdrop-filter: blur(75px); /* You can increase the blur */
+        background-color: rgba(0, 0, 0, 0.4); /* Optional: dim the background a bit */
+    }
+
+    .modal-body {
+        padding: 2rem;
+    }
+
+    .modal-content {
+        max-width: 600px;
+        margin: auto;
+    }
+
+    #previewContainer .card-body {
+        overflow: auto;
+    }
+
+    .preview-sidebar {
+        width: 400px;
+        min-width: 400px;
+        height: 80vh;
+    }
+
+    #previewContainer .card {
+        height: 100%;
+    }
+
+    .alert-warning input[type="checkbox"]:checked + label {
+        color: white !important;
+        font-weight: bold;
+    }
+</style>
+
+<div class="container mt-4">
+
+    <h2>Load Prescription</h2>
+
+    <div class="d-flex">
+        <div class="flex-grow-1 me-3" id="formContainer">
+            <form asp-action="LoadPrescriptions" method="post" enctype="multipart/form-data" id="prescriptionForm">
+                <input type="hidden" id="removedMedicationIds" name="RemovedMedicationIds" />
+
+                @if (Model.HasAllergyWarning)
+                {
+                    <div class="alert alert-warning">
+                        This customer is allergic to one or more ingredients in the selected medication.
+                        <br />
+                        <label>
+                            <input type="checkbox" id="overrideCheckbox" asp-for="OverrideAllergyConfirmed" />
+                            I have reviewed this warning and choose to override.
+                        </label>
+                        <br />
+                        <textarea asp-for="OverrideReason" placeholder="Reason for override (required)" class="form-control" disabled></textarea>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <input type="hidden" asp-for="PrescriptionFileUrl" id="PrescriptionFileUrl" />
+                    <label asp-for="PrescriptionFile" class="form-label">Upload Prescription</label>
+                    <input asp-for="PrescriptionFile" type="file" class="form-control" accept=".pdf" id="prescriptionFileInput" />
+                    <span asp-validation-for="PrescriptionFile" class="text-danger"></span>
+                </div>
+                <button type="button" class="btn btn-outline-secondary ms-3" onclick="togglePreview()">
+                    <i class="bi bi-file-earmark-medical me-1"></i>Preview Script
+                </button>
+
+                <div class="row">
+                    <div class="col-6">
+                        <label asp-for="CustomerType" class="control-label">Customer Type:</label>
+                        <select id="CustomerType" asp-for="CustomerType" class="form-select" asp-items="Html.GetEnumSelectList<CustomerType>()" aria-required="true">
+                        </select>
+
+                        <div id="existingCustomerFields" style="@(Model.CustomerType == CustomerType.ExistingCustomer ? "" : "display:none;")">
+                            <label asp-for="SelectedCustomerId" class="control-label">Find Customer:</label>
+                            <select asp-for="SelectedCustomerId" class="form-select" id="mySelect" asp-items="Model.ExistingCustomers" placeholder="search...">
+                                <option>Select Customer</option>
+
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-6">
+                        <label asp-for="DatePrescribed" class="control-label">Date Prescribed:</label>
+                        <input asp-for="DatePrescribed" class="form-control" type="date" />
+
+                        <label asp-for="SelectedDoctorId" class="control-label">Prescribed By:</label>
+                        <div class="input-group">
+                            <select asp-for="SelectedDoctorId" asp-items="Model.DoctorsList" class="form-select" aria-required="true">
+                                <option value="">Select Doctor</option>
+
+                            </select>
+                            <button type="button" class="btn btn-outline-primary" id="AddNewDoctor">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <h4>Select Medication</h4>
+                    @for (int i = 0; i < Model.SelectedMedications.Count; i++)
+                    {
+                        <input type="hidden" asp-for="SelectedMedications[@i].MedicationId" />
+                        <input type="hidden" asp-for="SelectedMedications[@i].MedicationName" />
+                        <input type="hidden" asp-for="SelectedMedications[@i].Quantity" />
+                        <input type="hidden" asp-for="SelectedMedications[@i].Instructions" />
+                        <input type="hidden" asp-for="SelectedMedications[@i].RepeatsLeft" />
+                    }
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label asp-for="SelectedMedicationId" class="form-label">Medication</label>
+                            <select asp-for="SelectedMedicationId" asp-items="Model.MedicationList" class="form-select select2">
+                                <option value="">Select Medication</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label asp-for="Quantity" class="form-label">Quantity</label>
+                            <input asp-for="Quantity" class="form-control" placeholder="Enter quantity" />
+                        </div>
+                        <div class="col-md-3">
+                            <label asp-for="Instructions" class="form-label">Instructions</label>
+                            <input asp-for="Instructions" class="form-control" placeholder="e.g. Take twice daily" />
+                        </div>
+                        <div class="col-md-3">
+                            <label asp-for="RepeatsLeft" class="form-label">Repeats Left</label>
+                            <input asp-for="RepeatsLeft" class="form-control" placeholder="e.g. 2" />
+                        </div>
+                    </div>
+
+
+                    <button type="submit" name="action" value="addMedication" class="btn btn-primary" id="addMedicationBtn"><i class="bi bi-plus-circle me-1"></i>Add</button>
+                    <p class="text-muted mb-4">Medication you select here will be added to the table of selected medication below.</p>
+
+                    <h3>Selected Medication</h3>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Medication</th>
+                                <th>Quantity</th>
+                                <th>Instruction</th>
+                                <th>Repeats</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.SelectedMedications != null)
+                            {
+                                for (int i = 0; i < Model.SelectedMedications.Count; i++)
+                                {
+                                    var med = Model.SelectedMedications[i];
+                                    <tr>
+                                        <td>
+                                            @med.MedicationName
+                                            <input type="hidden" name="SelectedMedications[@i].MedicationId" value="@med.MedicationId" />
+                                            <input type="hidden" name="SelectedMedications[@i].MedicationName" value="@med.MedicationName" />
+                                            <input type="hidden" name="SelectedMedications[@i].Quantity" value="@med.Quantity" />
+                                            <input type="hidden" name="SelectedMedications[@i].Instructions" value="@med.Instructions" />
+                                            <input type="hidden" name="SelectedMedications[@i].RepeatsLeft" value="@med.RepeatsLeft" />
+                                        </td>
+                                        <td>@med.Quantity</td>
+                                        <td>@med.Instructions</td>
+                                        <td>@med.RepeatsLeft</td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-danger" onclick="removeMedicationRow(this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" name="action" value="dispensePrescription" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#confirmDispenseModal">Dispense</button>
+                        <button type="button" name="action" value="savePrescription" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#confirmSaveModal">Save</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="preview-sidebar" id="previewContainer" style="display:none;">
+            <div class="card shadow h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Prescription Preview</h6>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="zoomOut()">➖</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="zoomIn()">➕</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetZoom()">🔄</button>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="Close" onclick="hidePreview()"></button>
+                </div>
+                <div class="card-body p-0">
+                    <iframe id="pdfPreview" style="display:none;" width="100%" height="100%"></iframe>
+                    <img id="imagePreview" class="img-fluid" style="display:none;" />
+                </div>
+
+            </div>
+        </div>
+        @await Html.PartialAsync("_NewCustomerModal", Model.NewCustomer)
+        @await Html.PartialAsync("_DoctorModal", Model.NewDoctor)
+    </div>
+</div>
+
+<!-- DISPENSE CONFIRMATION MODAL -->
+<div class="modal fade" id="confirmDispenseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>Confirm Dispense</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to dispense this prescription?</p>
+                <p>Choosing yes will dispense the selected medication and notifty the customer. </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmDispenseBtn" class="btn btn-success">Yes, Dispense</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--- SAVE CONFIRMATION MODAL -->
+<div class="modal fade" id="confirmSaveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-save2 me-2"></i>Confirm Save</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Do you want to save this prescription, to dispense later?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmSaveBtn" class="btn btn-dark">Yes, Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function() {
+            // Simple global variables
+        let zoomLevel = 1;
+        let lastUploadedFilePath = null;
+
+        // Simple global functions
+        function removeMedicationRow(button) {
+            if (!confirm("Remove this medication?")) return;
+
+            const row = $(button).closest("tr");
+            const medId = row.find("input[name*='MedicationId']").val();
+
+            if (medId) {
+                const removedIdsField = $('#removedMedicationIds');
+                let removedIds = removedIdsField.val() ? removedIdsField.val().split(",") : [];
+                if (!removedIds.includes(medId)) {
+                    removedIds.push(medId);
+                    removedIdsField.val(removedIds.join(","));
+                }
+            }
+
+            row.remove();
+            reindexMedicationRows();
+        }
+
+        function reindexMedicationRows() {
+            $('table.table tbody tr').each(function(index) {
+                $(this).find("input[name^='SelectedMedications']").each(function() {
+                    this.name = this.name.replace(/SelectedMedications\[\d+\]/, `SelectedMedications[${index}]`);
+                });
+            });
+        }
+
+        function showPreview(url, fileType = null) {
+            if (!url) return;
+
+            $('#previewContainer').show();
+            if (fileType === "application/pdf" || url.endsWith(".pdf")) {
+                $('#pdfPreview').attr('src', url).show();
+                $('#imagePreview').hide();
+            } else {
+                $('#imagePreview').attr('src', url).show();
+                $('#pdfPreview').hide();
+            }
+        }
+
+        function applyZoom() {
+            $('#pdfPreview, #imagePreview').css({
+                'transform': `scale(${zoomLevel})`,
+                'transform-origin': 'top left'
+            });
+        }
+
+        $(document).ready(function () {
+            console.log("Initializing page...");
+
+            // Clean up any modal conflicts
+            $('body').removeClass('modal-open');
+            $('.modal-backdrop').remove();
+
+            // Initialize Select2 (SIMPLE)
+            $('#mySelect').select2({
+                placeholder: "Search for a customer",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Customer Type logic (SIMPLE)
+            $('#CustomerType').change(function () {
+                const type = $(this).val();
+                if (type === "0") {
+                    $('#existingCustomerFields').hide();
+                    $('#newCustomerModal').modal('show');
+                } else {
+                    $('#existingCustomerFields').show();
+                }
+            });
+
+            // Set default customer type
+            $('#CustomerType').val('1').trigger('change');
+
+            // Allergy override toggle (SIMPLE)
+            $('#overrideCheckbox').change(function() {
+                const isChecked = $(this).is(':checked');
+                $('[name="OverrideReason"]').prop('disabled', !isChecked);
+                $('button[name="action"][value="dispensePrescription"]').prop('disabled', !isChecked);
+            }).trigger('change');
+
+            let lastUploadedFilePath = null;
+            const fileInput = document.getElementById("prescriptionFileInput");
+            const previewContainer = document.getElementById("previewContainer");
+            const pdfPreview = document.getElementById("pdfPreview");
+            const imagePreview = document.getElementById("imagePreview");
+            const hiddenField = document.getElementById("PrescriptionFileUrl");
+
+            async function uploadAndPreview(file) {
+                const formData = new FormData();
+                formData.append("file", file);
+                if (lastUploadedFilePath) formData.append("oldFilePath", lastUploadedFilePath);
+
+                try {
+                    const response = await fetch('/Pharmacist/UploadPrescriptionTemp', { method: 'POST', body: formData });
+                    const data = await response.json();
+
+                    hiddenField.value = data.url;
+                    lastUploadedFilePath = data.path;
+                    showPreview(data.url, file.type);
+                } catch (err) {
+                    console.error("Upload failed", err);
+                }
+            }
+
+            function showPreview(url, fileType = null) {
+                if (!url) return;
+                previewContainer.style.display = "block";
+                if (fileType ? fileType === "application/pdf" : url.endsWith(".pdf")) {
+                    pdfPreview.src = url;
+                    pdfPreview.style.display = "block";
+                    imagePreview.style.display = "none";
+                } else {
+                    imagePreview.src = url;
+                    imagePreview.style.display = "block";
+                    pdfPreview.style.display = "none";
+                }
+            }
+
+            if (fileInput) {
+                fileInput.addEventListener("change", function (event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    uploadAndPreview(file);
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+              if (hiddenField && hiddenField.value) {
+                  showPreview(hiddenField.value);
+              }
+            });
+           
+
+            window.hidePreview = () => previewContainer.style.display = "none";
+
+            window.togglePreview = () => {
+                previewContainer.style.display =
+                    (previewContainer.style.display === "none" || previewContainer.style.display === "")
+                        ? "block"
+                        : "none";
+            };
+
+            // File upload (SIMPLE)
+            // $('#prescriptionFileInput').change(function(e) {
+            //     const file = e.target.files[0];
+            //     if (!file) return;
+
+            //     const formData = new FormData();
+            //     formData.append("file", file);
+            //     if (lastUploadedFilePath) formData.append("oldFilePath", lastUploadedFilePath);
+
+            //     fetch('/Pharmacist/UploadPrescriptionTemp', {
+            //         method: 'POST',
+            //         body: formData
+            //     })
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         $('#PrescriptionFileUrl').val(data.url);
+            //         lastUploadedFilePath = data.path;
+            //         showPreview(data.url, file.type);
+            //     })
+            //     .catch(err => console.error("Upload failed", err));
+            // });
+
+            // // Preview controls (SIMPLE)
+            // window.togglePreview = function() {
+            //     $('#previewContainer').toggle();
+            // };
+
+            // window.hidePreview = function() {
+            //     $('#previewContainer').hide();
+            // };
+
+            // // Zoom controls (SIMPLE)
+            // window.zoomIn = function() {
+            //     zoomLevel += 0.1;
+            //     applyZoom();
+            // };
+
+            // window.zoomOut = function() {
+            //     if (zoomLevel > 0.2) zoomLevel -= 0.1;
+            //     applyZoom();
+            // };
+
+            // window.resetZoom = function() {
+            //     zoomLevel = 1;
+            //     applyZoom();
+            // };
+
+            // Doctor modal (SIMPLE)
+            $('#AddNewDoctor').click(function() {
+                $('#addDoctorModal').modal('show');
+            });
+
+            // Add Customer Form (SIMPLE - NO COMPLEX CLEANUP)
+            $(document).on('submit', '#addCustomerForm', function(e) {
+                e.preventDefault();
+
+                $.ajax({
+                    url: $(this).attr('action'),
+                    method: 'POST',
+                    data: $(this).serialize(),
+                    success: function(result) {
+                        // Check if validation failed (form still exists in response)
+                        if ($(result).find('form#addCustomerForm').length > 0) {
+                            // Update modal content
+                            $('#newCustomerModal .modal-content').html($(result).find('.modal-content').html());
+                            $.validator.unobtrusive.parse('#addCustomerForm');
+                        } else {
+                            // Success - close modal and reload
+                            $('#newCustomerModal').modal('hide');
+                            setTimeout(function() {
+                                location.reload();
+                            }, 300);
+                        }
+                    },
+                    error: function() {
+                        alert('Error adding customer. Please try again.');
+                    }
+                });
+            });
+
+            // Add Medication (SIMPLE - just let it submit normally)
+            // Remove the complex AJAX handler - let the form submit normally
+            // The preview preservation is handled by the sessionStorage approach
+
+            // Store preview state before "Add Medication" submission
+            $(document).on('click', 'button[name="action"][value="addMedication"]', function() {
+                const previewUrl = $('#PrescriptionFileUrl').val();
+                const isPreviewVisible = $('#previewContainer').is(':visible');
+
+                if (previewUrl) {
+                    sessionStorage.setItem('prescriptionPreviewUrl', previewUrl);
+                    sessionStorage.setItem('prescriptionPreviewVisible', isPreviewVisible.toString());
+                }
+            });
+
+            // // Restore preview state after page load
+            const savedPreviewUrl = sessionStorage.getItem('prescriptionPreviewUrl');
+            const wasPreviewVisible = sessionStorage.getItem('prescriptionPreviewVisible') === 'true';
+
+            if (savedPreviewUrl) {
+                $('#PrescriptionFileUrl').val(savedPreviewUrl);
+                showPreview(savedPreviewUrl);
+                if (!wasPreviewVisible) {
+                    $('#previewContainer').hide();
+                }
+                sessionStorage.removeItem('prescriptionPreviewUrl');
+                sessionStorage.removeItem('prescriptionPreviewVisible');
+            }
+
+            // Dispense/Save modals (SIMPLE)
+            $(document).on('click', 'button[name="action"][value="dispensePrescription"]', function(e) {
+                e.preventDefault();
+                $('#confirmDispenseModal').modal('show');
+            });
+
+            $(document).on('click', 'button[name="action"][value="savePrescription"]', function(e) {
+                e.preventDefault();
+                $('#confirmSaveModal').modal('show');
+            });
+
+            $('#confirmDispenseBtn').click(function() {
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'action',
+                    value: 'dispensePrescription'
+                }).appendTo('#prescriptionForm');
+                $('#prescriptionForm').submit();
+            });
+
+            $('#confirmSaveBtn').click(function() {
+                $('<input>').attr({
+                    type: 'hidden',
+                    name: 'action',
+                    value: 'savePrescription'
+                }).appendTo('#prescriptionForm');
+                $('#prescriptionForm').submit();
+            });
+
+            // Initial preview if exists
+            const existingUrl = $('#PrescriptionFileUrl').val();
+            if (existingUrl) showPreview(existingUrl);
+
+            // Simple allergy dropdown toggle
+            $(document).on('change', '#allergiesToggle', function() {
+                $('#allergyDropdownWrapper').toggle($(this).is(':checked'));
+            });
+
+            console.log("Page initialized successfully");
+        
+            });
+        });
+        
+    </script>
+}

@@ -1,0 +1,136 @@
+﻿@model IEnumerable<PrescribingSystem.Models.Prescription>
+@{
+    Layout = "_PharmacistLayout";
+}
+
+<body class="p-4">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="fw-bold">
+                <i class="bi bi-clipboard2-pulse me-2"></i> Saved Prescriptions
+            </h2>
+        </div>
+        <p class="text-muted mb-4">These prescriptions were saved but not yet dispensed.</p>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex gap-2">
+                <!-- Filter Dropdown -->
+                <select id="statusFilter" class="form-select form-select-sm" style="width: 200px;">
+                    <option value="all" selected>Show: All</option>
+                    <option value="saved">Saved for Later</option>
+                    <option value="dispensed">Dispensed</option>
+                    <option value="partiallydispensed">Partially dispensed</option>
+                </select>
+
+                <!-- Search Bar -->
+                <input type="text" id="searchInput" class="form-control form-control-sm"
+                       placeholder="Search by Customer, Doctor or Script #" style="width: 250px;">
+            </div>
+        </div>
+
+        <table class="table table-hover align-middle shadow-sm rounded">
+            <thead class="table-primary">
+                <tr>
+                    <th>Customer </th>
+                    <th>Prescription Date</th>
+                    <th>Prescribed by</th>
+                    <th>Script #</th>
+                    <th>Status</th>
+                    <th colspan="2" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="prescriptionTableBody">
+                @foreach (var prescription in Model)
+                {
+                    if (Model != null) //Change to show only with status "saved" and "dispensed"
+                    {
+                        <tr data-status="@(prescription.PrescriptionStatus == PrescriptionStatus.Dispensed ? "dispensed" : "saved")"
+                            data-customer="@($"{prescription.Customer?.FirstName} {prescription.Customer?.LastName}".ToLower())"
+                            data-doctor="@($"Ddr. {prescription.Doctor?.Surname}".ToLower())"
+                            data-script="@prescription.PrescriptionId.ToString().ToLower()">
+
+                            <td>@prescription.Customer?.FirstName @prescription.Customer?.LastName</td>
+                            <td>@prescription.PrescriptionDate.ToString("dd/MM/yyyy")</td>
+                            <td>@(prescription.Doctor != null ? $"Dr. {prescription.Doctor.Surname}" : "-")</td>
+                            <td>@($"Script #{prescription.PrescriptionId}")</td>
+                            <td>
+                                @if (prescription.PrescriptionStatus == PrescriptionStatus.Dispensed)
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle me-1"></i> Dispensed
+                                    </span>
+                                }
+                                else if(prescription.PrescriptionStatus == PrescriptionStatus.PartiallyDispensed)
+                                {
+                                    <span class="badge bg-primary">
+                                        <i class="bi bi-save me-1"></i>Partially dispensed
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-save me-1"></i> Saved for Later
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                              @*   <!-- Continue existing prescription -->
+                                <a asp-action="ContinuePrescription" asp-route-id="@prescription.PrescriptionId"
+                                   class="btn btn-sm btn-primary">
+                                    <i class="bi bi-pencil-square"></i> Continue
+                                </a> *@
+
+                                <!-- View all customer scripts -->
+                                <a asp-action="DispenseSelected" asp-route-customerId="@prescription.CustomerId"
+                                   class="btn btn-sm  btn-primary">
+                                    <i class="bi bi-collection"></i> View Scripts
+                                </a>
+                            </td>
+                            @* <td>
+                                <a asp-action="DispenseSelected" asp-route-id="@prescription.PrescriptionId" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </td> *@
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-start mt-4">
+            <a asp-action="Dashboard" asp-controller="Pharmacist" class="btn btn-secondary">
+                <i class="bi bi-arrow-left-circle me-1"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</body>
+
+@section Scripts {
+    <script>
+        const searchInput = document.getElementById("searchInput");
+        const statusFilter = document.getElementById("statusFilter");
+        const tableBody = document.getElementById("prescriptionTableBody");
+
+               function filterTable() {
+            const searchValue = searchInput.value.toLowerCase();
+            const selectedStatus = statusFilter.value;
+
+            [...tableBody.querySelectorAll("tr")].forEach(row => {
+                const rowStatus = row.dataset.status || "";
+                const rowCustomer = row.dataset.customer || "";
+                const rowDoctor = row.dataset.doctor || "";
+                const rowScript = row.dataset.script || "";
+
+                const matchesStatus = selectedStatus === "all" || rowStatus === selectedStatus;
+                const matchesSearch = rowCustomer.includes(searchValue)
+                    || rowDoctor.includes(searchValue)
+                    || rowScript.includes(searchValue);
+
+                row.style.display = (matchesStatus && matchesSearch) ? "" : "none";
+            });
+        }
+
+        searchInput.addEventListener("input", filterTable);
+        statusFilter.addEventListener("change", filterTable);
+    </script>
+}

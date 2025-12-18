@@ -1,0 +1,233 @@
+﻿@model PrescribingSystem.Models.ViewModels.WalkInDispensingViewModel
+@{
+    Layout = "_PharmacistLayout";
+}
+
+<div class="container py-4">
+    <h3 class="mb-4">Walk-In Dispensing</h3>
+
+    <!-- Alerts -->
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Customer Dropdown -->
+    <form asp-action="WalkInDispense" method="get" class="row g-3 mb-4">
+        <div class="col-md-6">
+            <label for="customerId" class="form-label">Select Customer</label>
+            <select id="customerSelect" name="customerId" class="form-select searchable-dropdown" onchange="this.form.submit()">
+                <option value="">-- Choose a customer --</option>
+                @foreach (var customer in Model.Customers)
+                {
+                    <option value="@customer.Value"
+                            data-identity="@customer.Text.Split('(').Last().Trim(')')"
+                            selected="@(customer.Value == Model.SelectedCustomerId)">
+                        @customer.Text
+                    </option>
+                }
+            </select>
+
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label fw-bold">Identity Number</label>
+            <input type="text" class="form-control" value="@Model.CustomerIdentityNumber" readonly />
+        </div>
+    </form>
+
+    <!-- Medication Table -->
+    @if (Model.Medications != null && Model.Medications.Any())
+    {
+        <form asp-action="WalkInDispense" method="post" id="walkInForm">
+            <input type="hidden" asp-for="SelectedCustomerId" />
+
+            <!-- Allergy Alert -->
+            @if (Model.HasAllergyWarning)
+            {
+                <div class="alert alert-warning">
+                    <strong>Allergy Alert!</strong><br />
+                    This patient is allergic to one or more ingredients in
+                    <strong>@ViewBag.AllergicMedication</strong>.
+                    <br />
+                    <small>Allergic ingredients: @ViewBag.AllergicIngredients</small>
+                    <hr />
+
+                    <div class="form-check mb-2">
+                        <input type="checkbox" id="overrideCheckbox" asp-for="OverrideAllergyConfirmed" class="form-check-input" />
+                        <label for="overrideCheckbox" class="form-check-label">
+                            I have reviewed this warning and wish to override.
+                        </label>
+                    </div>
+
+                    <textarea asp-for="OverrideReason"
+                              placeholder="Reason for override (required)"
+                              class="form-control"
+                              id="overrideReason"
+                              disabled></textarea>
+
+                    <span asp-validation-for="OverrideReason" class="text-danger"></span>
+                </div>
+            }
+
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <strong>Medications for Selected Customer</strong>
+                </div>
+
+                <div class="card-body">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Select</th>
+                                <th>Prescribed By</th>
+                                <th>Medication</th>
+                                <th>Quantity</th>
+                                <th>Instructions</th>
+                                <th>Repeats Left</th>
+                              
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < Model.Medications.Count; i++)
+                            {
+                                var med = Model.Medications[i];
+                                @*    bool canDispense = med.RepeatsLeft > 0 || med.Status == "Pending"; *@
+
+                                <tr>
+                                    <td>
+                                        <input type="hidden" name="Medications[@i].MedicationItemId" value="@med.MedicationItemId" />
+                                        <input type="checkbox"
+                                               name="Medications[@i].IsSelected"
+                                               value="true"
+                                               @(med.IsSelected ? "checked" : "") />
+                                    </td>
+                                    <td>@med.DoctorName</td>
+                                    <td>@med.MedicationName</td>
+                                    <td>@med.Quantity</td>
+                                    <td>@med.Instructions</td>
+                                    <td>@med.RepeatsLeft</td>
+                                   
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card-footer d-flex justify-content-end">
+                    <a asp-action="Dashboard" asp-controller="Pharmacist" class="btn btn-secondary">Back</a>
+                    <button type="submit"
+                            id="dispenseButton"
+                            class="btn btn-primary px-4"
+                            @(Model.HasAllergyWarning ? "disabled" : "")>
+                        Dispense Selected
+                    </button>
+                </div>
+            </div>
+        </form>
+    }
+    else if (!string.IsNullOrEmpty(Model.SelectedCustomerId))
+    {
+        <div class="alert alert-info mt-4">
+            No medications found for this customer.
+        </div>
+    }
+</div>
+<!-- Modal HTML -->
+<div class="modal fade" id="confirmDispenseModal" tabindex="-1" aria-labelledby="confirmDispenseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="confirmDispenseModalLabel">Confirm Dispense</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to dispense the selected medications?</p>
+                <p class="text-muted small mb-0">
+                    This action will mark the selected the medication as <strong>Dispensed</strong> in the system.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="confirmNo" class="btn btn-secondary">Cancel</button>
+                <button type="button" id="confirmYes" class="btn btn-primary">Yes, Dispense</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // ------------------- Select2 Setup -------------------
+            $('#customerSelect').select2({
+                theme: 'bootstrap-5',
+                placeholder: "-- Choose a customer --",
+                allowClear: true,
+                width: '100%'
+            });
+
+            // Automatically show ID number
+            $('#customerSelect').on('change', function () {
+                const selectedOption = $(this).find(':selected');
+                const idNumber = selectedOption.data('identity') || '';
+                $('#identityNumberBox').val(idNumber);
+            });
+
+            // ------------------- Allergy Override Logic -------------------
+            const overrideCheckbox = document.getElementById("overrideCheckbox");
+            const overrideReason = document.getElementById("overrideReason");
+            const dispenseButton = document.getElementById("dispenseButton");
+
+            if (overrideCheckbox && overrideReason && dispenseButton) {
+                overrideCheckbox.addEventListener("change", function () {
+                    if (this.checked) {
+                        overrideReason.disabled = false;
+                        overrideReason.focus();
+                    } else {
+                        overrideReason.disabled = true;
+                        overrideReason.value = "";
+                        dispenseButton.disabled = true;
+                    }
+                });
+
+                overrideReason.addEventListener("input", function () {
+                    dispenseButton.disabled = !(overrideCheckbox.checked && this.value.trim().length > 0);
+                });
+            }
+
+            // ------------------- Dispense Confirmation Modal -------------------
+            const form = document.getElementById("walkInForm");
+            const confirmModal = new bootstrap.Modal(document.getElementById("confirmDispenseModal"));
+            const confirmYesBtn = document.getElementById("confirmYes");
+            const confirmNoBtn = document.getElementById("confirmNo");
+
+            if (form && dispenseButton) {
+                dispenseButton.addEventListener("click", function (e) {
+                    e.preventDefault(); // stop direct submit
+                    confirmModal.show();
+                });
+
+                confirmYesBtn.addEventListener("click", function () {
+                    form.submit();
+                });
+
+                confirmNoBtn.addEventListener("click", function () {
+                    confirmModal.hide();
+                });
+            }
+        });
+    </script>
+
+   
+}
